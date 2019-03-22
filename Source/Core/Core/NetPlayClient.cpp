@@ -57,6 +57,8 @@
 #include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/VideoConfig.h"
 
+#include "MarioPartyNetplay/DownloadQueue.h"
+
 namespace NetPlay
 {
 static std::mutex crit_netplay_client;
@@ -431,7 +433,7 @@ unsigned int NetPlayClient::OnData(sf::Packet& packet)
 
       // Trusting server for good map value (>=0 && <4)
       // add to pad buffer
-      m_pad_buffer.at(map).Push(pad);
+      m_pad_buffer.at(map & 0x0F).Push(pad);
       m_gc_pad_event.Set();
     }
   }
@@ -508,6 +510,10 @@ unsigned int NetPlayClient::OnData(sf::Packet& packet)
     ipl_status_packet << static_cast<MessageId>(NP_MSG_IPL_STATUS);
     ipl_status_packet << ExpansionInterface::CEXIIPL::HasIPLDump();
     Send(ipl_status_packet);
+
+    /* MPN - Download saves and codes */
+    if (m_selected_game.find("Mario Party") == std::string::npos)
+      DownloadQueue.pushBack(m_selected_game);
   }
   break;
 
@@ -1237,23 +1243,31 @@ void NetPlayClient::GetPlayerList(std::string& list, std::vector<int>& pid_list)
   std::ostringstream ss;
 
   const auto enumerate_player_controller_mappings = [&ss](const PadMappingArray& mappings,
-                                                          const Player& player) {
-    for (size_t i = 0; i < mappings.size(); i++)
+                                                          const Player& player,
+                                                          const bool EightPlayer) {
+    for (uint8_t Left = 0, Right = 4; Left < mappings.size(); Left++, Right++)
     {
-      if (mappings[i] == player.pid)
-        ss << i + 1;
+      if (mappings[Left] == player.pid)
+        ss << Left + 1 << EightPlayer ? 'L' : ' ';
+      if (mappings[Right] == player.pid)
+        ss << Left + 1 << EightPlayer ? 'R' : ' ';
       else
         ss << '-';
     }
   };
+
+  bool EightPlayer = false;
+  for (uint8_t Right = 4; Right < m_pad_map.size(); Right++)
+    if (m_pad_map[Right] != -1)
+      EightPlayer = true;
 
   for (const auto& entry : m_players)
   {
     const Player& player = entry.second;
     ss << player.name << "[" << static_cast<int>(player.pid) << "] : " << player.revision << " | ";
 
-    enumerate_player_controller_mappings(m_pad_map, player);
-    enumerate_player_controller_mappings(m_wiimote_map, player);
+    enumerate_player_controller_mappings(m_pad_map, player, EightPlayer);
+    enumerate_player_controller_mappings(m_wiimote_map, player, false);
 
     ss << " |\nPing: " << player.ping << "ms\n";
     ss << "Status: ";
@@ -1551,6 +1565,7 @@ void NetPlayClient::UpdateDevices()
   u8 local_pad = 0;
   u8 pad = 0;
 
+  /* MPN: Prevent out-of-bounds error in controller count by anding with 3 */
   for (auto player_id : m_pad_map)
   {
     // Use local controller types for local controllers if they are compatible
@@ -1567,6 +1582,7 @@ void NetPlayClient::UpdateDevices()
         SerialInterface::AddDevice(SerialInterface::SIDEVICE_GC_CONTROLLER, pad);
       }
       local_pad++;
+      local_pad &= 0x03;
     }
     else if (player_id > 0)
     {
@@ -1577,6 +1593,7 @@ void NetPlayClient::UpdateDevices()
       SerialInterface::AddDevice(SerialInterface::SIDEVICE_NONE, pad);
     }
     pad++;
+    pad &= 0x03;
   }
 }
 

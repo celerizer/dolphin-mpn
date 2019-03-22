@@ -196,7 +196,7 @@ using MessageId = u8;
 using PlayerId = u8;
 using FrameNum = u32;
 using PadMapping = s8;
-using PadMappingArray = std::array<PadMapping, 4>;
+using PadMappingArray = std::array<PadMapping, 8>;
 
 bool IsNetPlayRunning();
 // Precondition: A netplay client instance must be present. In other words,

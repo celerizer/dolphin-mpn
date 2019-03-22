@@ -50,6 +50,8 @@
 #include "InputCommon/GCPadStatus.h"
 #include "UICommon/GameFile.h"
 
+#include "MarioPartyNetplay/8Player.h"
+
 #if !defined(_WIN32)
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -91,6 +93,8 @@ NetPlayServer::~NetPlayServer()
 #ifdef USE_UPNP
   UPnP::StopPortmapping();
 #endif
+
+  mpn_8p_free();
 }
 
 // called from ---GUI--- thread
@@ -325,6 +329,7 @@ unsigned int NetPlayServer::OnConnect(ENetPeer* socket)
       mapping = player.pid;
       break;
     }
+    /* MPN-TODO: Fill this when MP7 is selected? */
   }
 
   // send join message to already connected clients
@@ -494,10 +499,31 @@ void NetPlayServer::UpdatePadMapping()
 {
   sf::Packet spac;
   spac << (MessageId)NP_MSG_PAD_MAPPING;
+  if (mpn_8p_active())
+  {
+    for (uint8_t Left = 0, Right = 4; Left < 4; Left++, Right++)
+    {
+      if (m_pad_map[Right] != -1)
+      {
+        /* Activate teams that have both a left and right player */
+        if (m_pad_map[Left] != -1)
+          mpn_8p_set_port_active(Left, true);
+        /* If there's only a right player, set him/her to left */
+        //else
+        //{
+        //  m_pad_map[Left] = Right;
+        //  mpn_8p_set_port_active(Left, false);
+        //}
+      }
+      else
+        mpn_8p_set_port_active(Left, false);
+    }
+  }
   for (PadMapping mapping : m_pad_map)
   {
     spac << mapping;
   }
+
   SendToClients(spac);
 }
 
@@ -645,19 +671,22 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
       break;
 
     sf::Packet spac;
+    PadMapping map = -1;
     spac << static_cast<MessageId>(NP_MSG_PAD_DATA);
 
     while (!packet.endOfPacket())
     {
-      PadMapping map;
       packet >> map;
+
+      /* MPN - Secondary controllers start at 0x40 */
+      // map &= 3;
 
       // If the data is not from the correct player,
       // then disconnect them.
-      if (m_pad_map.at(map) != player.pid)
-      {
-        return 1;
-      }
+      // if (m_pad_map.at(map) != player.pid)
+      //{
+      //  return 1;
+      //}
 
       GCPadStatus pad;
       packet >> pad.button >> pad.analogA >> pad.analogB >> pad.stickX >> pad.stickY >>
@@ -675,13 +704,21 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
       }
       else
       {
-        spac << map << pad.button << pad.analogA << pad.analogB << pad.stickX << pad.stickY
+        if (mpn_8p_active())
+        {
+          mpn_8p_push_back_input(&pad, map);
+          if (mpn_8p_port_ready(map))
+            pad = mpn_8p_combined_input(map);
+          else
+            return 0;
+        }
+        spac << (map & 3) << pad.button << pad.analogA << pad.analogB << pad.stickX << pad.stickY
              << pad.substickX << pad.substickY << pad.triggerLeft << pad.triggerRight
              << pad.isConnected;
       }
     }
 
-    if (!m_host_input_authority)
+    if (!m_host_input_authority && map != -1)
       SendToClients(spac, player.pid);
   }
   break;
@@ -1045,6 +1082,9 @@ bool NetPlayServer::ChangeGame(const std::string& game)
   spac << game;
 
   SendAsyncToClients(std::move(spac));
+
+  /* MPN TODO: If current game is MP7 */
+  mpn_8p_init();
 
   return true;
 }

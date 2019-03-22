@@ -38,7 +38,7 @@ private:
   NetPlay::PadMappingArray m_wii_mapping;
 
   QGridLayout* m_main_layout;
-  std::array<QComboBox*, 4> m_gc_boxes;
+  std::array<QComboBox*, 8> m_gc_boxes;
   std::array<QComboBox*, 4> m_wii_boxes;
   std::vector<const NetPlay::Player*> m_players;
   QDialogButtonBox* m_button_box;

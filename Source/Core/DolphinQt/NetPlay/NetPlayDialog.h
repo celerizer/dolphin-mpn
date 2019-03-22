@@ -94,6 +94,8 @@ private:
 
   void SetGame(const QString& game_path);
 
+  bool isMarioParty();
+
   // Chat
   QGroupBox* m_chat_box;
   QTextEdit* m_chat_edit;

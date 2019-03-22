@@ -59,6 +59,14 @@
 
 #include "VideoCommon/VideoConfig.h"
 
+bool NetPlayDialog::isMarioParty()
+{
+  if (m_current_game.find("Mario Party") != std::string::npos)
+    return true;
+  else
+    return false;
+}
+
 NetPlayDialog::NetPlayDialog(QWidget* parent)
     : QDialog(parent), m_game_list_model(Settings::Instance().GetGameListModel())
 {
@@ -77,7 +85,7 @@ NetPlayDialog::NetPlayDialog(QWidget* parent)
   CreateMainLayout();
 
   const int buffer_size = Config::Get(Config::NETPLAY_BUFFER_SIZE);
-  const bool write_save_sdcard_data = Config::Get(Config::NETPLAY_WRITE_SAVE_SDCARD_DATA);
+  const bool write_save_sdcard_data = isMarioParty() ? true : Config::Get(Config::NETPLAY_WRITE_SAVE_SDCARD_DATA);
   const bool load_wii_save = Config::Get(Config::NETPLAY_LOAD_WII_SAVE);
   const bool sync_saves = Config::Get(Config::NETPLAY_SYNC_SAVES);
   const bool sync_codes = Config::Get(Config::NETPLAY_SYNC_CODES);
@@ -803,10 +811,15 @@ void NetPlayDialog::AppendChat(const std::string& msg)
 void NetPlayDialog::OnMsgChangeGame(const std::string& title)
 {
   QString qtitle = QString::fromStdString(title);
-  QueueOnObject(this, [this, qtitle, title] {
+  const bool write_save_sdcard_data =
+      isMarioParty() ? true : Config::Get(Config::NETPLAY_WRITE_SAVE_SDCARD_DATA);
+
+  QueueOnObject(this, [this, qtitle, title, write_save_sdcard_data] {
     m_game_button->setText(qtitle);
     m_current_game = title;
     UpdateDiscordPresence();
+    m_save_sd_box->setChecked(write_save_sdcard_data);
+    m_save_sd_box->setDisabled(isMarioParty());
   });
   DisplayMessage(tr("Game changed to \"%1\"").arg(qtitle), "magenta");
 }

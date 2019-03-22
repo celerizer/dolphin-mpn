@@ -28,6 +28,8 @@
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
 
+#include "Core/MarioPartyNetplay/Gamestate.h"
+
 namespace PatchEngine
 {
 constexpr std::array<const char*, 3> s_patch_type_strings{{
@@ -250,6 +252,9 @@ bool ApplyFramePatches()
   }
 
   ApplyPatches(s_on_frame);
+
+  /* MPN: We inject our custom code here to avoid interfering too much */
+  mpn_per_frame();
 
   // Run the Gecko code handler
   Gecko::RunCodeHandler();
