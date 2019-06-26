@@ -3,14 +3,9 @@
 
 #include "Gamestate.h"
 
-uint16_t CurrentSceneId = 0;
-uint16_t PreviousSceneId = 0;
+mpn_state_t CurrentState;
 
-const mpn_gamestate_t* CurrentState = NULL;
-const mpn_gamestate_t* CurrentStateArray = NULL;
-const mpn_game_metadata_t* GameMetadata = NULL;
-
-bool initializeCurrentStateArray()
+bool mpn_init_state()
 {
   if (!Memory::IsInitialized())
     return false;
@@ -18,45 +13,99 @@ bool initializeCurrentStateArray()
   switch (mpn_read_value(0x00000000, 4))
   {
   case MPN_GAMEID_MP4:
-    CurrentStateArray = MP4_GAMESTATES;
-    GameMetadata = &MP4_ADDRESSES;
+    CurrentState.Addresses    = &MP4_ADDRESSES;
+    CurrentState.Boards       = MP4_BOARDS;
+    CurrentState.Image        = "box-mp4";
+    CurrentState.IsMarioParty = true;
+    CurrentState.Scenes       = MP4_GAMESTATES;
+    CurrentState.Title        = "Mario Party 4";
     break;
   case MPN_GAMEID_MP5:
-    CurrentStateArray = MP5_GAMESTATES;
+    CurrentState.Addresses    = &MP5_ADDRESSES;
+    CurrentState.Boards       = MP5_BOARDS;
+    CurrentState.Image        = "box-mp5";
+    CurrentState.IsMarioParty = true;
+    CurrentState.Scenes       = MP5_GAMESTATES;
+    CurrentState.Title        = "Mario Party 5";
     break;
   case MPN_GAMEID_MP6:
-    CurrentStateArray = MP6_GAMESTATES;
+    CurrentState.Addresses    = &MP6_ADDRESSES;
+    CurrentState.Boards       = MP6_BOARDS;
+    CurrentState.Image        = "box-mp6";
+    CurrentState.IsMarioParty = true;
+    CurrentState.Scenes       = MP6_GAMESTATES;
+    CurrentState.Title        = "Mario Party 6";
     break;
   case MPN_GAMEID_MP7:
-    CurrentStateArray = MP7_GAMESTATES;
+    //CurrentState.Addresses    = &MP7_ADDRESSES;
+    //CurrentState.Boards       = MP7_BOARDS;
+    CurrentState.Image        = "box-mp7";
+    CurrentState.IsMarioParty = true;
+    CurrentState.Scenes       = MP7_GAMESTATES;
+    CurrentState.Title        = "Mario Party 7";
     break;
   case MPN_GAMEID_MP8:
-    CurrentStateArray = MP8_GAMESTATES;
+    CurrentState.Addresses    = &MP8_ADDRESSES;
+    CurrentState.Boards       = NULL;
+    CurrentState.Image        = "box-mp8";
+    CurrentState.IsMarioParty = true;
+    CurrentState.Scenes       = MP8_GAMESTATES;
+    CurrentState.Title        = "Mario Party 8";
     break;
-  case MPN_GAMEID_MP9:
-    CurrentStateArray = NULL;
-    break;
+  case MPN_GAMEID_MP9: /* TODO */
   default:
-    CurrentStateArray = NULL;
+    CurrentState.Addresses    = NULL;
+    CurrentState.Boards       = NULL;
+    CurrentState.Image        = "default";
+    CurrentState.IsMarioParty = false;
+    CurrentState.Scenes       = NULL;
   }
 
-  return CurrentStateArray == NULL;
+  return CurrentState.Scenes != NULL;
+}
+
+bool mpn_update_board()
+{
+  uint8_t i;
+
+  if (CurrentState.Boards == NULL)
+    CurrentState.Board = NULL;
+  else if (CurrentState.CurrentSceneId != CurrentState.PreviousSceneId)
+  {
+    for (i = 0;; i++)
+    {
+      /* Unknown scene ID */
+      if (CurrentState.Boards[i].SceneId == NONE)
+        break;
+      if (CurrentState.Boards[i].SceneId == CurrentState.CurrentSceneId)
+      {
+        CurrentState.Board = &CurrentState.Boards[i];
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 uint8_t mpn_get_needs(uint16_t StateId, bool IsSceneId)
 {
-  uint16_t i = 0;
+  uint16_t i;
 
-  if (CurrentStateArray == NULL)
+  if (CurrentState.Scenes == NULL)
     return MPN_NEEDS_NOTHING;
-
-  if (CurrentSceneId != PreviousSceneId)
+  else if (CurrentState.CurrentSceneId != CurrentState.PreviousSceneId)
   {
-    for (i = 0; i < 4; i++)
+    for (i = 0;; i++)
     {
-      if ((IsSceneId && StateId == CurrentStateArray[i].SceneId) ||
-          (StateId == CurrentStateArray[i].MiniGameId))
-        return CurrentStateArray[i].Needs;
+      /* Unknown scene ID */
+      if (CurrentState.Scenes[i].SceneId == NONE)
+        return MPN_NEEDS_NOTHING;
+
+      /* Scene ID found in array */
+      if ((IsSceneId && StateId == CurrentState.Scenes[i].SceneId) ||
+          (StateId == CurrentState.Scenes[i].MiniGameId))
+        return CurrentState.Scenes[i].Needs;
     }
   }
 
@@ -72,43 +121,46 @@ void mpn_push_osd_message(const std::string& Message)
 
 bool mpn_update_state()
 {
-  if (CurrentStateArray == NULL && !initializeCurrentStateArray())
+  if (CurrentState.Scenes == NULL && !mpn_init_state())
     return false;
   if (!Memory::IsInitialized())
     return false;
 
-  PreviousSceneId = CurrentSceneId;
-  CurrentSceneId = mpn_read_value(GameMetadata->SceneIdAddress, 2);
+  CurrentState.PreviousSceneId = CurrentState.CurrentSceneId;
+  CurrentState.CurrentSceneId = mpn_read_value(CurrentState.Addresses->SceneIdAddress, 2);
 
-  for (uint16_t i = 0; i < 50; i++)
+  for (uint16_t i = 0;; i++)
   {
-    if (CurrentSceneId == CurrentStateArray[i].SceneId)
+    if (CurrentState.Scenes[i].SceneId == NONE)
+      break;
+    if (CurrentState.CurrentSceneId == CurrentState.Scenes[i].SceneId)
     {
-      CurrentState = &CurrentStateArray[i];
+      CurrentState.Scene = &CurrentState.Scenes[i];
       return true;
     }
   }
-  CurrentState = NULL;
 
   return false;
 }
 
+#define OSD_PUSH(a) mpn_push_osd_message("Adjusting #a for " + CurrentState.Scene->Name);
 void mpn_per_frame()
 {
   uint8_t Needs = 0;
 
-  if (!mpn_update_state() || PreviousSceneId == CurrentSceneId)
+  if (!mpn_update_state() || CurrentState.PreviousSceneId == CurrentState.CurrentSceneId)
     return;
 
+  mpn_update_board();
   mpn_update_discord();
 
-  Needs = mpn_get_needs(mpn_read_value(GameMetadata->MinigameIdAddress, 2));
+  Needs = mpn_get_needs(mpn_read_value(CurrentState.Addresses->SceneIdAddress, 2), true);
 
   if (Needs != MPN_NEEDS_NOTHING)
   {
     if (Needs & MPN_NEEDS_SAFE_TEX_CACHE)
     {
-      mpn_push_osd_message("Adjusting GFX_SAFE_TEXTURE_CACHE_COLOR_SAMPLES");
+      OSD_PUSH(GFX_SAFE_TEXTURE_CACHE_COLOR_SAMPLES)
       Config::SetCurrent(Config::GFX_SAFE_TEXTURE_CACHE_COLOR_SAMPLES, 0);
     }
     else
@@ -116,7 +168,7 @@ void mpn_per_frame()
 
     if (Needs & MPN_NEEDS_NATIVE_RES)
     {
-      mpn_push_osd_message("Adjusting GFX_EFB_SCALE");
+      OSD_PUSH(GFX_EFB_SCALE)
       Config::SetCurrent(Config::GFX_EFB_SCALE, 1);
     }
     else
@@ -124,7 +176,7 @@ void mpn_per_frame()
 
     if (Needs & MPN_NEEDS_EFB_TO_TEXTURE)
     {
-      mpn_push_osd_message("Adjusting GFX_HACK_SKIP_EFB_COPY_TO_RAM");
+      OSD_PUSH(GFX_HACK_SKIP_EFB_COPY_TO_RAM)
       Config::SetCurrent(Config::GFX_HACK_SKIP_EFB_COPY_TO_RAM, false);
     }
     else
@@ -133,7 +185,7 @@ void mpn_per_frame()
     /* TODO: Special casing for the two 1v3 minis that use split orientation */
     if (Needs & MPN_NEEDS_SIDEWAYS_WIIMOTE)
     {
-      mpn_push_osd_message("Adjusting Wii Remote orientation");
+      OSD_PUSH(Wii Remote orientation)
       for (uint8_t i = 0; i < 4; i++)
       {
         Wiimote::GetWiimoteGroup(i, WiimoteEmu::WiimoteGroup::Options)

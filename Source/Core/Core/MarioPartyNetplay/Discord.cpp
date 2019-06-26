@@ -10,53 +10,30 @@ bool mpn_update_discord()
 
   DiscordRichPresence RichPresence = {};
 
-  RichPresence.largeImageKey = "box-mp4";
-  RichPresence.largeImageText = "Mario Party 4";
-  
-  if (CurrentState != NULL)
-    RichPresence.state = CurrentState->Name.c_str();
+  RichPresence.largeImageKey = CurrentState.Image ? CurrentState.Image : "default";
+  RichPresence.largeImageText = CurrentState.Title ? CurrentState.Title : "In-Game";
 
-  if (GameMetadata != NULL)
+  if (CurrentState.Scenes != NULL && CurrentState.Scene != NULL)
+    RichPresence.state = CurrentState.Scene->Name.c_str();
+
+  if (CurrentState.Addresses != NULL)
   {
-    char Details[128] = "dummy";
+    char Details[128] = "";
 
-    snprintf(Details, sizeof(Details), "Players: %d/4 Turn: %d/%d",
-      1,
-      mpn_read_value(GameMetadata->CurrentTurn, 1),
-      mpn_read_value(GameMetadata->TotalTurns, 1));
-    RichPresence.details = Details;
-
-    switch (mpn_read_value(GameMetadata->Board, 1))
+    if (CurrentState.Boards && CurrentState.Board)
     {
-    case 0:
-      RichPresence.smallImageKey = "mp4-toad";
-      RichPresence.smallImageText = "Toad's Midway Madness";
-      break;
-    case 1:
-      RichPresence.smallImageKey = "mp4-goomba";
-      RichPresence.smallImageText = "Goomba's Greedy Gala";
-      break;
-    case 2:
-      RichPresence.smallImageKey = "mp4-shyguy";
-      RichPresence.smallImageText = "Shy Guy's Jungle Jam";
-      break;
-    case 3:
-      RichPresence.smallImageKey = "mp4-boo";
-      RichPresence.smallImageText = "Boo's Haunted Bash";
-      break;
-    case 4:
-      RichPresence.smallImageKey = "mp4-koopa";
-      RichPresence.smallImageText = "Koopa's Seaside Soiree";
-      break;
-    case 5:
-      RichPresence.smallImageKey = "mp4-bowser";
-      RichPresence.smallImageText = "Bowser's Gnarly Party";
-      break;
-    default:
-      RichPresence.smallImageKey = "mp4-bowser";
-      RichPresence.smallImageText = "Bowser's Gnarly Party";
-      break;
+      snprintf(Details, sizeof(Details), "Turn: %d/%d",
+               mpn_read_value(CurrentState.Addresses->CurrentTurn, 1),
+               mpn_read_value(CurrentState.Addresses->TotalTurns, 1));
+      RichPresence.smallImageKey = CurrentState.Board->Icon.c_str();
+      RichPresence.smallImageText = CurrentState.Board->Name.c_str();
     }
+    else
+    {
+      RichPresence.smallImageKey = "";
+      RichPresence.smallImageText = "";
+    }
+    RichPresence.details = Details;
   }
   Discord_UpdatePresence(&RichPresence);
 

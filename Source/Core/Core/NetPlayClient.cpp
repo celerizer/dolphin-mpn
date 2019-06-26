@@ -1881,8 +1881,8 @@ bool NetPlayClient::PollLocalPad(const int local_pad, sf::Packet& packet)
     // inserting multiple padstates or dropping states
     while (m_pad_buffer[ingame_pad].Size() <= m_target_buffer_size)
     {
-      // add to buffer
-      m_pad_buffer[ingame_pad].Push(pad_status);
+      /* Don't push local pad to buffer so we wait for 8P result */
+      //m_pad_buffer[ingame_pad].Push(pad_status);
 
       // add to packet
       AddPadStateToPacket(ingame_pad, pad_status, packet);

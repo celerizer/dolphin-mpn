@@ -8,10 +8,13 @@
 
 /* Apparently this dependancy doesn't support SSL */
 #define MPN_WEBSITE "http://www.mariopartynetplay.com/"
+#define MPN_NO_UPDATES "MPN-OK"
+#define MPN_VERSION 1
 
 typedef struct mpn_download_t
 {
   std::string LocalFile;
+  std::string LocalPath;
   std::string RemoteFile;
 } mpn_download_t;
 
@@ -20,6 +23,7 @@ class MpnDownloadQueue
 public:
   MpnDownloadQueue();
 
+  bool checkVersion();
   bool downloadAll();
   bool pushBack(const std::string& Uri);
 

@@ -718,8 +718,9 @@ unsigned int NetPlayServer::OnData(sf::Packet& packet, Client& player)
       }
     }
 
+    /* MPN: Remove 2nd argument so return packet gets sent back to sender */
     if (!m_host_input_authority && map != -1)
-      SendToClients(spac, player.pid);
+      SendToClients(spac);
   }
   break;
 
